@@ -1,8 +1,7 @@
 """
 Author: Cole Kampa
-Date: 09-14-2020
-Description: Fits simple linear gradient model that satisfies Maxwell's equations
-(i.e. div(B)=0, assuming Bphi=0) to DS Tracker region magnetic field. Current use case is for KinKal corrections due to BField inhomogeneities. KinKal uses a constant: double grad_ with units tesla/mm, so these units are used here as well.
+Date: 09-18-2020
+Description: Script for visualizing magnetic bottles. An assumption is made that bottles are driven by locations where Br changes sign. Current use case is to check coil-shifted DS map for GA requested changes.
 """
 import os
 import numpy as np
@@ -14,7 +13,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from user_configs import *
 
 # set plot configs
-plt.rcParams['figure.figsize'] = [10, 8] # larger figures
+plt.rcParams['figure.figsize'] = [12, 8] # larger figures
 plt.rcParams['axes.grid'] = True         # turn grid lines on
 plt.rcParams['axes.axisbelow'] = True    # put grid below points
 plt.rcParams['grid.linestyle'] = '--'    # dashed grid
@@ -23,7 +22,7 @@ plt.rcParams.update({'font.size': 12.0})   # increase plot font size
 # check if proper directories exist
 def check_dirs(outdir=outdir):
     print('Checking directories')
-    to_check = ['plots/', 'plots/linear_gradient/', 'pickles/']
+    to_check = ['plots/', 'plots/bottle_viz/', 'pickles/']
     for tc in to_check:
         if not os.path.exists(outdir+tc):
             os.mkdir(outdir+tc)
@@ -38,16 +37,28 @@ def read_Bmap_txt(filename=mapdir+mapfile):
     return df
 
 # shift and calculate
-def calculate_Bmap_extras(df):
+def calculate_Bmap_extras(df, length_scale=1., field_scale=1.):
     print('Calculating extras for dataframe')
     df.eval('X = X + 3896', inplace=True) # want x=y=0 along magnet axis
     df.eval('R = (X**2 + Y**2)**(1/2)', inplace=True) # radius
     df.eval('Phi = arctan2(Y,X)', inplace=True) # phi
     df.eval('Br = Bx*cos(Phi)+By*sin(Phi)', inplace=True) # calculate Br for fitting
     df.eval('Bphi = -Bx*sin(Phi)+By*cos(Phi)', inplace=True) # Bphi calculated for completion...not needed
+    # rescale positions
+    df.eval(f'X = {length_scale} * X', inplace=True)
+    df.eval(f'Y = {length_scale} * Y', inplace=True)
+    df.eval(f'Z = {length_scale} * Z', inplace=True)
+    df.eval(f'R = {length_scale} * R', inplace=True)
+    # rescalse fields
+    df.eval(f'Bx = {field_scale} * Bx', inplace=True)
+    df.eval(f'By = {field_scale} * By', inplace=True)
+    df.eval(f'Bz = {field_scale} * Bz', inplace=True)
+    df.eval(f'Br = {field_scale} * Br', inplace=True)
+    df.eval(f'Bphi = {field_scale} * Bphi', inplace=True)
     print(df.head())
     return df
 
+'''
 # query proper region
 def query_tracker(df):
     print('Query for tracker region')
@@ -59,6 +70,7 @@ def query_tracker(df):
     df = df.query(f'R <= {rmax} & Z >= {zcent-zpm} & Z <= {zcent+zpm}')
     df.reset_index(drop=True, inplace=True)
     return df
+'''
 
 # pickle/unpickle data
 def write_pickle_df(df, filename=outdir+'pickles/'+mapfile_pkl):
@@ -69,6 +81,7 @@ def read_pickle_df(filename=outdir+'pickles/'+mapfile_pkl):
     print('Loading pickle')
     return pd.read_pickle(filename)
 
+'''
 # model function
 def maxwell_gradient(r, z, **params):
     Bz = params['dBzdz'] * z + params['B0']
@@ -118,12 +131,14 @@ def run_fit_Bz(df, model_func=Bz_gradient):
     df.to_pickle(outdir+'pickles/df_results.pkl')
     print(result.fit_report())
     return result, df
+'''
 
-def write_result(result, filename=outdir+'fit_result.txt'):
-    with open(filename, 'w+') as f:
-        f.write(result.fit_report())
+# def write_result(result, filename=outdir+'fit_result.txt'):
+#     with open(filename, 'w+') as f:
+#         f.write(result.fit_report())
 
 # plotting
+'''
 def make_plots(df, result):
     # wireframes
     df0 = df.query('Y==0')
@@ -150,8 +165,8 @@ def make_plots(df, result):
         plt.legend()
         fig.suptitle(f'{B} vs. X, Z for Y==0')
         fig.tight_layout(rect=(0,0.04,1,1))
-        fig.savefig(outdir+f'plots/linear_gradient/{B}_vs_X_Z_Y=0.pdf')
-        fig.savefig(outdir+f'plots/linear_gradient/{B}_vs_X_Z_Y=0.png')
+        fig.savefig(outdir+f'plots/{B}_vs_X_Z_Y=0.pdf')
+        fig.savefig(outdir+f'plots/{B}_vs_X_Z_Y=0.png')
     # residual histograms
     plt.rcParams['figure.figsize'] = [16, 8] # larger figures
     plt.rcParams.update({'font.size': 18.0})   # increase plot font size
@@ -195,7 +210,34 @@ def make_plots(df, result):
         title_main=f'Linear Gradient Tracker Region {title_}Residuals'
         fig.suptitle(title_main)
         fig.tight_layout(rect=[0,0,1,1])
-        plot_file = outdir+f'plots/linear_gradient/B{fname_}_residuals_hist'
+        plot_file = outdir+f'plots/B{fname_}_residuals_hist'
+        fig.savefig(plot_file+'.pdf')
+        fig.savefig(plot_file+'.png')
+'''
+
+def make_plots(df, query, clips, names, mapname='Mau13 (coil shift)', fname='coilshift'):
+    df_ = df.query(query).copy()
+    df_.sort_values(by=['Z', 'X'], inplace=True)
+    Lz = len(df_.Z.unique())
+    Lx = len(df_.X.unique())
+    X = df_.Z.values.reshape((Lz, Lx))
+    Y = df_.X.values.reshape((Lz, Lx))
+    for clip, name in zip(clips, names):
+        if clip is None:
+            clip = np.max(np.abs(df_['Br']))
+        if clip == -1:
+            C = (df_['Br'] > 0).values.reshape((Lz, Lx))
+        else:
+            C = np.clip(df_['Br'].values, -clip, clip).reshape((Lz, Lx))
+        fig = plt.figure()
+        p = plt.pcolormesh(X, Y, C, shading='auto')
+        cb = plt.colorbar(p)
+        cb.ax.set_ylabel('Br [Gauss]')
+        plt.xlabel('Z [m]')
+        plt.ylabel('X [m]')
+        plt.title(r'$B_r$'+ f' in {mapname} DS: ({name})\n{query}')
+        fig.tight_layout(rect=[0,0,1,1])
+        plot_file = outdir+f'plots/bottle_viz/{fname}_Br_vs_X_vs_Z_clip-{clip}_query-{query}'
         fig.savefig(plot_file+'.pdf')
         fig.savefig(plot_file+'.png')
 
@@ -206,15 +248,13 @@ if __name__ == '__main__':
     # calculate data from raw file or pickle from previous calculation
     pickle_exists = os.path.exists(outdir+'pickles/'+mapfile_pkl)
     if pickle_exists and usepickle:
-        df_tracker = read_pickle_df()
+        df = read_pickle_df()
     else:
-        df_raw = read_Bmap_txt()
-        df_calc = calculate_Bmap_extras(df_raw)
-        df_tracker = query_tracker(df_calc)
-        write_pickle_df(df_tracker)
-    # run linear gradient fit
-    result, df_tracker = run_fit_maxwell(df_tracker) # fit to Bz and Br, satisfying Maxwell's eqns
-    # result, df_tracker = run_fit_Bz(df_tracker) # only fit to Bz
-    write_result(result)
-    # make some plots
-    make_plots(df_tracker, result)
+        df = read_Bmap_txt()
+        df = calculate_Bmap_extras(df, length_scale=1e-3, field_scale=1e4)
+        write_pickle_df(df)
+    # making plots
+    make_plots(df, '(Y==0.) & (R <= 1.)', clips=[None, 1e3, 1e2, 1e1, -1],
+               names=['Full Scale', r'$|B_r| \leq 1000$ Gauss', r'$|B_r| \leq 100$ Gauss', r'$|B_r| \leq 10$ Gauss', r'$B_r$ positive/negative'],
+               mapname='Mau13', fname='mau13')
+               # mapname='Mau13 (coil shift)', fname='coilshift')
