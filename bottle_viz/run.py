@@ -215,26 +215,32 @@ def make_plots(df, result):
         fig.savefig(plot_file+'.png')
 '''
 
-def make_plots(df, query, clips, names, mapname='Mau13 (coil shift)', fname='coilshift'):
+def make_plots(df, query, clips, names, x='Z', y='X', mapname='Mau13 (coil shift)', fname='coilshift'):
     df_ = df.query(query).copy()
-    df_.sort_values(by=['Z', 'X'], inplace=True)
-    Lz = len(df_.Z.unique())
-    Lx = len(df_.X.unique())
-    X = df_.Z.values.reshape((Lz, Lx))
-    Y = df_.X.values.reshape((Lz, Lx))
+    df_.sort_values(by=[x, y], inplace=True)
+    Lx = len(df_[x].unique())
+    Ly = len(df_[y].unique())
+    X = df_[x].values.reshape((Lx, Ly))
+    Y = df_[y].values.reshape((Lx, Ly))
+    # Lz = len(df_.Z.unique())
+    # Lx = len(df_.X.unique())
+    # X = df_.Z.values.reshape((Lz, Lx))
+    # Y = df_.X.values.reshape((Lz, Lx))
     for clip, name in zip(clips, names):
         if clip is None:
             clip = np.max(np.abs(df_['Br']))
         if clip == -1:
-            C = (df_['Br'] > 0).values.reshape((Lz, Lx))
+            # C = (df_['Br'] > 0).values.reshape((Lz, Lx))
+            C = (df_['Br'] > 0).values.reshape((Lx, Ly))
         else:
-            C = np.clip(df_['Br'].values, -clip, clip).reshape((Lz, Lx))
+            # C = np.clip(df_['Br'].values, -clip, clip).reshape((Lz, Lx))
+            C = np.clip(df_['Br'].values, -clip, clip).reshape((Lx, Ly))
         fig = plt.figure()
         p = plt.pcolormesh(X, Y, C, shading='auto')
         cb = plt.colorbar(p)
         cb.ax.set_ylabel('Br [Gauss]')
-        plt.xlabel('Z [m]')
-        plt.ylabel('X [m]')
+        plt.xlabel(f'{x} [m]')
+        plt.ylabel(f'{y} [m]')
         plt.title(r'$B_r$'+ f' in {mapname} DS: ({name})\n{query}')
         fig.tight_layout(rect=[0,0,1,1])
         plot_file = outdir+f'plots/bottle_viz/{fname}_Br_vs_X_vs_Z_clip-{clip}_query-{query}'
@@ -254,7 +260,11 @@ if __name__ == '__main__':
         df = calculate_Bmap_extras(df, length_scale=1e-3, field_scale=1e4)
         write_pickle_df(df)
     # making plots
-    make_plots(df, '(Y==0.) & (R <= 1.)', clips=[None, 1e3, 1e2, 1e1, -1],
-               names=['Full Scale', r'$|B_r| \leq 1000$ Gauss', r'$|B_r| \leq 100$ Gauss', r'$|B_r| \leq 10$ Gauss', r'$B_r$ positive/negative'],
-               mapname='Mau13', fname='mau13')
+    # make_plots(df, '(Y==0.) & (R <= 1.)', clips=[None, 1e3, 1e2, 1e1, -1],
+    # make_plots(df, '(X==0.) & (R <= 1.)', clips=[None, 1e3, 1e2, 1e1, -1],
+    make_plots(df, '(Z==9.946) & (X <= 1.) & (X >= -1.) & (Y <= 1.) & (Y >= -1.)', clips=[None, 1e3, 1e2, 1e1, -1],
+               names=['Full Scale', r'$|B_r| \leq 1000$ Gauss', r'$|B_r| \leq 100$ Gauss', r'$|B_r| \leq 10$ Gauss', r'$B_r$ positive/negative'], x='X', y='Y',
+               # names=['Full Scale', r'$|B_r| \leq 1000$ Gauss', r'$|B_r| \leq 100$ Gauss', r'$|B_r| \leq 10$ Gauss', r'$B_r$ positive/negative'], x='Z', y='Y',
+               mapname='Mau13 (coil shift, no bus)', fname='coilshift_nobus')
+               # mapname='Mau13', fname='mau13')
                # mapname='Mau13 (coil shift)', fname='coilshift')
