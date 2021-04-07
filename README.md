@@ -38,3 +38,20 @@ $ python run.py
 ## Muon Magnetic Bottle Analysis
 - 'mu2e_utils/mu_bottle_analysis/'
 - Analyze 'Time Virtual Detectors ntuple' (nttvd) ROOT files where t=0 ns and t=700 ns (if particle survives this long) are saved. Particles that survive until t=700 ns are called "trapped" and indicate magnetic bottle locations.
+
+## Magnetic Field Plotting
+- 'mu2e_utils/BField_plot/'
+- Process magnetic field map file from CVMFS and make 3D surface plots in Plotly.
+    1. Process map: can change passed in function parameters to change units
+    ```bash
+    $ cd BField_plot
+    $ conda activate mu2e_utils
+    $ python process_map.py
+    ```
+    which will save pickled `pandas.DataFrame` in `data` directory (not synced to git)
+    2. Make plots: CAUTION -- value of "sliced" variable in query must be exact, and can be copied from the printed output of 'process_map.py'.
+    ```bash
+    ...
+    $ python plot_B_slice.py
+    ```
+    which will output in the `plots` directory (not synced to git)
